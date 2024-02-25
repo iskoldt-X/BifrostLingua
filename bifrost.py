@@ -6,7 +6,12 @@ import subprocess
 from nltk.tokenize import sent_tokenize, word_tokenize
 from pydub import AudioSegment
 
-def segment_text(input_text_path, output_text_path, max_words=12):
+def split_sentence_by_words(sentence, max_words):
+    words = word_tokenize(sentence, language='danish')
+    for i in range(0, len(words), max_words):
+        yield ' '.join(words[i:i+max_words])
+
+def segment_text(input_text_path, output_text_path, max_words):
     with open(input_text_path, 'r', encoding='utf-8') as file:
         text = file.read()
     
@@ -14,9 +19,11 @@ def segment_text(input_text_path, output_text_path, max_words=12):
     
     with open(output_text_path, 'w', encoding='utf-8') as out_file:
         for sentence in sentences:
-            # Tokenize the sentence into words and check the length
-            words = word_tokenize(sentence, language='danish')
-            if max_words is None or len(words) <= max_words:
+            # If the sentence is longer than max_words, split it
+            if len(word_tokenize(sentence, language='danish')) > max_words:
+                for chunk in split_sentence_by_words(sentence, max_words):
+                    out_file.write(chunk + '\n')
+            else:
                 out_file.write(sentence + '\n')
 
 def run_aeneas(mp3_path, text_path, json_path):
@@ -57,11 +64,21 @@ def english_audio(output_text_path, english_sentences_dir):
         output_filename = os.path.join(english_sentences_dir, f'sentence_{i:03}.mp3')
         translate_to_english_audio(sentence, output_filename)
 
+def is_audio_file_valid(filepath):
+    try:
+        # Attempt to load the file with PyDub
+        audio = AudioSegment.from_mp3(filepath)
+        return True
+    except Exception as e:
+        print(f"Error loading {filepath}: {e}")
+        return False
+
 def combine_audio_units(english_sentences_dir, danish_sentences_dir, fixed_gap_length=2000, weight=1.2, danish_repeats=2):
     if not os.path.exists(english_sentences_dir) or not os.path.exists(danish_sentences_dir):
         print("One or both of the specified directories do not exist.")
         return
-    output_file_path = f'combined_audio_{danish_repeats}_repeats_{weight}_weight.mp3'
+    
+    output_file_path = f'/data/combined_audio_weight_{str(weight)}_repeats{str(danish_repeats)}.mp3'  # Adjust your output path as needed
     combined = AudioSegment.empty()
     english_files = sorted([f for f in os.listdir(english_sentences_dir) if f.endswith('.mp3')],
                            key=lambda f: int(f.split('_')[-1].split('.')[0]))
@@ -69,25 +86,24 @@ def combine_audio_units(english_sentences_dir, danish_sentences_dir, fixed_gap_l
                           key=lambda f: int(f.split('_')[-1].split('.')[0]))
     
     for english_file, danish_file in zip(english_files, danish_files):
-        english_audio = AudioSegment.from_mp3(os.path.join(english_sentences_dir, english_file))
-        danish_audio = AudioSegment.from_mp3(os.path.join(danish_sentences_dir, danish_file))
+        english_filepath = os.path.join(english_sentences_dir, english_file)
+        danish_filepath = os.path.join(danish_sentences_dir, danish_file)
+        
+        if not is_audio_file_valid(english_filepath) or not is_audio_file_valid(danish_filepath):
+            print(f"Skipping invalid files: {english_file}, {danish_file}")
+            continue
+        
+        english_audio = AudioSegment.from_mp3(english_filepath)
+        danish_audio = AudioSegment.from_mp3(danish_filepath)
         
         # Add English audio
-        combined += english_audio
-        
-        # Fixed gap between English and Danish audio
-        combined += AudioSegment.silent(duration=fixed_gap_length)
+        combined += english_audio + AudioSegment.silent(duration=fixed_gap_length)
         
         # Add Danish audio, repeats, and weighted gaps
         for _ in range(danish_repeats):
-            combined += danish_audio
-            # Weighted gap after Danish audio, based on the length of the Danish audio
-            weighted_gap_length = int(len(danish_audio) * weight)
-            combined += AudioSegment.silent(duration=weighted_gap_length)
+            combined += danish_audio + AudioSegment.silent(duration=int(len(danish_audio) * weight))
     
     # Export combined audio
-    if not os.path.exists(os.path.dirname(output_file_path)):
-        os.makedirs(os.path.dirname(output_file_path))
     combined.export(output_file_path, format='mp3')
     print(f'Combined audio file created at: {output_file_path}')
 
@@ -96,9 +112,10 @@ def main(mp3_path, input_text_path):
     json_path = '/data/alignment.json'
     sentences_dir = '/data/danish_sentences'
     english_sentences_dir = '/data/english_sentences'
+    max_words = 50
 
     # Segment text
-    segment_text(input_text_path, output_text_path)
+    segment_text(input_text_path, output_text_path, max_words)
 
     # Run aeneas for audio-text alignment
     run_aeneas(mp3_path, output_text_path, json_path)

@@ -3,16 +3,21 @@ import nltk
 import json
 import os
 import subprocess
-from nltk.tokenize import sent_tokenize
+from nltk.tokenize import sent_tokenize, word_tokenize
 from pydub import AudioSegment
 
-def segment_text(input_text_path, output_text_path):
+def segment_text(input_text_path, output_text_path, max_words=12):
     with open(input_text_path, 'r', encoding='utf-8') as file:
         text = file.read()
+    
     sentences = sent_tokenize(text, language='danish')
+    
     with open(output_text_path, 'w', encoding='utf-8') as out_file:
         for sentence in sentences:
-            out_file.write(sentence + '\n')
+            # Tokenize the sentence into words and check the length
+            words = word_tokenize(sentence, language='danish')
+            if max_words is None or len(words) <= max_words:
+                out_file.write(sentence + '\n')
 
 def run_aeneas(mp3_path, text_path, json_path):
     aeneas_command = [

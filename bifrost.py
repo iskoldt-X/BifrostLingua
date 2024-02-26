@@ -1,3 +1,4 @@
+import argparse
 import sys
 import nltk
 import json
@@ -19,12 +20,12 @@ def segment_text(input_text_path, output_text_path, max_words):
     
     with open(output_text_path, 'w', encoding='utf-8') as out_file:
         for sentence in sentences:
-            # If the sentence is longer than max_words, split it
             if len(word_tokenize(sentence, language='danish')) > max_words:
                 for chunk in split_sentence_by_words(sentence, max_words):
                     out_file.write(chunk + '\n')
             else:
                 out_file.write(sentence + '\n')
+
 
 def run_aeneas(mp3_path, text_path, json_path):
     aeneas_command = [
@@ -107,12 +108,11 @@ def combine_audio_units(english_sentences_dir, danish_sentences_dir, fixed_gap_l
     combined.export(output_file_path, format='mp3')
     print(f'Combined audio file created at: {output_file_path}')
 
-def main(mp3_path, input_text_path):
+def main(mp3_path, input_text_path, max_words, fixed_gap_length, weight, danish_repeats):
     output_text_path = '/data/segmented_text.txt'
     json_path = '/data/alignment.json'
     sentences_dir = '/data/danish_sentences'
     english_sentences_dir = '/data/english_sentences'
-    max_words = 50
 
     # Segment text
     segment_text(input_text_path, output_text_path, max_words)
@@ -127,10 +127,17 @@ def main(mp3_path, input_text_path):
     segment_audio(json_path, mp3_path, sentences_dir)
 
     # Combine audio units
-    combine_audio_units(english_sentences_dir, sentences_dir)
+    combine_audio_units(english_sentences_dir, sentences_dir, fixed_gap_length, weight, danish_repeats)
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print("Usage: python bifrost.py <mp3_path> <input_text_path>")
-        sys.exit(1)
-    main(sys.argv[1], sys.argv[2])
+    parser = argparse.ArgumentParser(description="Process some integers.")
+    parser.add_argument('mp3_path', type=str, help='Path to the MP3 file')
+    parser.add_argument('input_text_path', type=str, help='Path to the input text file')
+    parser.add_argument('--max_words', type=int, default=12, help='Maximum words per sentence segment')
+    parser.add_argument('--fixed_gap_length', type=int, default=2000, help='Fixed gap length in milliseconds between sentences')
+    parser.add_argument('--weight', type=float, default=1.2, help='Weight for the gap length after Danish sentences')
+    parser.add_argument('--danish_repeats', type=int, default=2, help='Number of times Danish sentences are repeated')
+
+    args = parser.parse_args()
+
+    main(args.mp3_path, args.input_text_path, args.max_words, args.fixed_gap_length, args.weight, args.danish_repeats)

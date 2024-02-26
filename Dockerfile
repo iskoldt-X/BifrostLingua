@@ -10,4 +10,3 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 ENTRYPOINT ["python3", "bifrost.py"]
-CMD ["/data/audio.mp3", "/data/text.txt"]

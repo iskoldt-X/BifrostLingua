@@ -51,7 +51,7 @@ def segment_audio(json_file_path, audio_path, sentences_dir):
 
 def translate_to_english_audio(sentence, output_filename):
     command = [
-        './trans', '-b', '-s', 'da', '-t', 'en',
+        '/app/trans', '-b', '-s', 'da', '-t', 'en',
         '-download-audio-as', output_filename,
         sentence
     ]
